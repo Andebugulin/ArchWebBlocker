@@ -5,7 +5,7 @@ const ArchBlockerTerminal = () => {
   const [websites, setWebsites] = useState([]);
   const [currentCommand, setCurrentCommand] = useState('');
   const [history, setHistory] = useState([
-    'Welcome to ArchBlocker v1.0',
+    'Welcome to ArchBlocker v1.1',
     'Type "help" for available commands',
     '-----------------------------------'
   ]);
@@ -42,12 +42,58 @@ const ArchBlockerTerminal = () => {
     return url.includes('.') && !url.includes(' ') && !url.includes('http');
   };
 
+  const pauseWebsite = async (url, duration) => {
+    try {
+      const response = await fetch(`http://localhost:5000/websites/${url}/pause`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ duration }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to pause website');
+      }
+
+      const result = await response.json();
+      addToHistory(`Paused ${url} for ${duration} minutes`);
+      addToHistory(`Remaining today: ${result.remainingPauses} pauses, ${result.remainingMinutes} minutes`);
+      await fetchWebsites();
+    } catch (err) {
+      addToHistory(`⚠️ Error: ${err.message}`);
+    }
+  };
+
   const processCommand = async (cmd) => {
     const parts = cmd.toLowerCase().split(' ');
     
     switch(parts[0]) {
       case 'help':
         setShowHelp(true);
+        break;
+
+      case 'pause':
+        if (parts.length >= 2) {
+          const url = parts[1];
+          const duration = parseInt(parts[2]) || 5; // default to 5 minutes if not specified
+          
+          if (!validateUrl(url)) {
+            addToHistory('Error: Invalid URL format. Use domain.com format');
+            break;
+          }
+          
+          if (duration <= 0 || duration > 15) {
+            addToHistory('Error: Duration must be between 1 and 15 minutes');
+            break;
+          }
+
+          await pauseWebsite(url, duration);
+        } else {
+          addToHistory('Usage: pause domain.com [minutes]');
+          addToHistory('Example: pause facebook.com 5');
+        }
         break;
 
       case 'add':
@@ -168,6 +214,7 @@ const ArchBlockerTerminal = () => {
               <p className="text-yellow-400">Available Commands:</p>
               <p>add &lt;website&gt; &lt;startTime&gt; &lt;endTime&gt;</p>
               <p>remove &lt;website&gt;</p>
+              <p>pause &lt;website&gt; [minutes] - Pause blocking (max 15 min)</p>
               <p>list - Show all blocked sites</p>
               <p>refresh - Refresh website list</p>
               <p>status - Check service status</p>
@@ -176,7 +223,8 @@ const ArchBlockerTerminal = () => {
               <br />
               <p className="text-yellow-400">Examples:</p>
               <p>add facebook.com 09:00 17:00</p>
-              <p>remove instagram.com</p>
+              <p>pause instagram.com 5</p>
+              <p>remove twitter.com</p>
             </div>
           )}
         </div>
